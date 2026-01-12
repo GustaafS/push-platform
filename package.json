@@ -1,0 +1,27 @@
+{
+  "name": "push-platform",
+  "version": "1.0.0",
+  "description": "Generic Push Notification Platform",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter @push-platform/api dev",
+    "dev:worker": "pnpm --filter @push-platform/worker dev",
+    "build": "pnpm -r build",
+    "migrate": "pnpm --filter @push-platform/db migrate",
+    "db:generate": "pnpm --filter @push-platform/db generate",
+    "db:studio": "pnpm --filter @push-platform/db studio",
+    "test": "pnpm -r test"
+  },
+  "keywords": [
+    "push-notifications",
+    "firebase",
+    "fcm",
+    "multi-tenant"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

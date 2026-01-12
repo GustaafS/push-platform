@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: push-platform-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: push_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: push-platform-api
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/push_platform
+      API_PORT: 3000
+      API_HOST: 0.0.0.0
+      NODE_ENV: development
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      API_KEYS: ${API_KEYS:-dev-api-key-12345}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: push-platform-worker
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/push_platform
+      NODE_ENV: development
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      WORKER_POLL_INTERVAL_MS: 10000
+      WORKER_BATCH_SIZE: 100
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
