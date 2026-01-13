@@ -8,6 +8,12 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { AppError } from '@push-platform/shared';
 
+// Import routes manually for ESM compatibility
+import healthRoute from './routes/health/index.js';
+import onboardRoute from './routes/v1/onboard/index.js';
+import devicesRoute from './routes/v1/devices/index.js';
+import pushRoute from './routes/v1/push/index.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -79,13 +85,14 @@ export async function buildServer() {
   await fastify.register(autoload, {
     dir: join(__dirname, 'plugins'),
     options: { prefix: '' },
+    forceESM: true,
   });
 
-  // Register routes
-  await fastify.register(autoload, {
-    dir: join(__dirname, 'routes'),
-    options: { prefix: '' },
-  });
+  // Register routes manually for ESM compatibility
+  await fastify.register(healthRoute);
+  await fastify.register(onboardRoute, { prefix: '/v1' });
+  await fastify.register(devicesRoute, { prefix: '/v1' });
+  await fastify.register(pushRoute, { prefix: '/v1' });
 
   // Error handler
   fastify.setErrorHandler((error, request, reply) => {

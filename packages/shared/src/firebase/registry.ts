@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp, deleteApp, cert, type App } from 'firebase-admin/app';
+import { initializeApp, deleteApp, cert, type App } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import { getEnvOptional } from '../utils/env.js';
 

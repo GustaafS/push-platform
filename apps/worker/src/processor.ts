@@ -1,12 +1,11 @@
 import { eq, and, or, lte, isNull, sql, inArray } from 'drizzle-orm';
 import type { DbClient } from '@push-platform/db';
-import { pushDeliveries, deviceTokens, pushMessages, devices, applications } from '@push-platform/db';
+import { pushDeliveries, deviceTokens, pushMessages } from '@push-platform/db';
 import {
   FirebaseRegistry,
   MAX_RETRY_COUNT,
   INVALID_REGISTRATION_ERRORS,
   TRANSIENT_FCM_ERRORS,
-  TERMINAL_DELIVERY_STATUSES,
 } from '@push-platform/shared';
 import pino from 'pino';
 

@@ -39,3 +39,12 @@ drizzle/
 # Temporary files
 tmp/
 temp/
+
+# Firebase Configuration Files
+# WARNING: These files contain sensitive credentials
+firebase-credentials.json
+firebase-credentials-*.json
+*-adminsdk-*.json
+GoogleService-Info.plist
+*.p8
+.firebase/

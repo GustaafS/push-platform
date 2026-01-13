@@ -1,0 +1,283 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  deployments: write
+
+jobs:
+  # Run database migrations before deployment
+  migrate:
+    name: Run Database Migrations
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "Running database migrations..."
+          pnpm migrate
+          echo "Migrations completed successfully"
+
+  # Deploy API to staging
+  deploy-api:
+    name: Deploy API
+    runs-on: ubuntu-latest
+    needs: migrate
+    environment: staging
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create GitHub deployment
+        uses: chrnorm/deployment-action@v2
+        id: deployment
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: staging
+          environment-url: ${{ secrets.API_URL || 'https://api-staging.example.com' }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy API to staging
+        run: |
+          echo "Deploying API to staging environment..."
+          echo "Image: ghcr.io/${{ github.repository_owner }}/push-platform-api:sha-${{ github.sha }}"
+          echo ""
+          echo "Environment variables configured:"
+          echo "- DATABASE_URL: [REDACTED]"
+          echo "- FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || '[NOT SET]' }}"
+          echo "- API_KEYS: [REDACTED]"
+          echo "- NODE_ENV: production"
+          echo "- API_PORT: 3000"
+          echo "- API_HOST: 0.0.0.0"
+          echo ""
+          echo "==================================================================="
+          echo "DEPLOYMENT INSTRUCTIONS FOR YOUR PLATFORM:"
+          echo "==================================================================="
+          echo ""
+          echo "For Railway:"
+          echo "  railway up --service api --environment staging"
+          echo "  railway variables set DATABASE_URL=\$DATABASE_URL"
+          echo "  railway variables set FIREBASE_PROJECT_ID=\$FIREBASE_PROJECT_ID"
+          echo "  railway variables set API_KEYS=\$API_KEYS"
+          echo "  railway variables set NODE_ENV=production"
+          echo "  railway variables set API_PORT=3000"
+          echo "  railway variables set API_HOST=0.0.0.0"
+          echo ""
+          echo "For Google Cloud Run:"
+          echo "  gcloud run deploy push-platform-api \\"
+          echo "    --image ghcr.io/${{ github.repository_owner }}/push-platform-api:sha-${{ github.sha }} \\"
+          echo "    --platform managed \\"
+          echo "    --region us-central1 \\"
+          echo "    --set-env-vars DATABASE_URL=\$DATABASE_URL,FIREBASE_PROJECT_ID=\$FIREBASE_PROJECT_ID,API_KEYS=\$API_KEYS,NODE_ENV=production,API_PORT=3000,API_HOST=0.0.0.0"
+          echo ""
+          echo "For Docker-based platforms:"
+          echo "  docker pull ghcr.io/${{ github.repository_owner }}/push-platform-api:sha-${{ github.sha }}"
+          echo "  docker run -d \\"
+          echo "    -e DATABASE_URL=\$DATABASE_URL \\"
+          echo "    -e FIREBASE_PROJECT_ID=\$FIREBASE_PROJECT_ID \\"
+          echo "    -e API_KEYS=\$API_KEYS \\"
+          echo "    -e NODE_ENV=production \\"
+          echo "    -e API_PORT=3000 \\"
+          echo "    -e API_HOST=0.0.0.0 \\"
+          echo "    -p 3000:3000 \\"
+          echo "    ghcr.io/${{ github.repository_owner }}/push-platform-api:sha-${{ github.sha }}"
+          echo ""
+          echo "==================================================================="
+          echo ""
+          echo "NOTE: This workflow provides deployment instructions."
+          echo "To enable automatic deployment, configure your platform's CLI"
+          echo "and add the deployment commands to this step."
+          echo ""
+          echo "API deployment prepared successfully!"
+
+      - name: Update deployment status (success)
+        if: success()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          state: success
+          environment-url: ${{ secrets.API_URL || 'https://api-staging.example.com' }}
+
+      - name: Update deployment status (failure)
+        if: failure()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          state: failure
+
+  # Deploy Worker to staging
+  deploy-worker:
+    name: Deploy Worker
+    runs-on: ubuntu-latest
+    needs: migrate
+    environment: staging
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create GitHub deployment
+        uses: chrnorm/deployment-action@v2
+        id: deployment
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: staging-worker
+          environment-url: ${{ secrets.WORKER_URL || 'https://worker-staging.example.com' }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy Worker to staging
+        run: |
+          echo "Deploying Worker to staging environment..."
+          echo "Image: ghcr.io/${{ github.repository_owner }}/push-platform-worker:sha-${{ github.sha }}"
+          echo ""
+          echo "Environment variables configured:"
+          echo "- DATABASE_URL: [REDACTED]"
+          echo "- FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || '[NOT SET]' }}"
+          echo "- NODE_ENV: production"
+          echo "- WORKER_POLL_INTERVAL_MS: 10000"
+          echo "- WORKER_BATCH_SIZE: 100"
+          echo "- MAX_RETRY_COUNT: 5"
+          echo ""
+          echo "==================================================================="
+          echo "DEPLOYMENT INSTRUCTIONS FOR YOUR PLATFORM:"
+          echo "==================================================================="
+          echo ""
+          echo "For Railway:"
+          echo "  railway up --service worker --environment staging"
+          echo "  railway variables set DATABASE_URL=\$DATABASE_URL"
+          echo "  railway variables set FIREBASE_PROJECT_ID=\$FIREBASE_PROJECT_ID"
+          echo "  railway variables set NODE_ENV=production"
+          echo "  railway variables set WORKER_POLL_INTERVAL_MS=10000"
+          echo "  railway variables set WORKER_BATCH_SIZE=100"
+          echo "  railway variables set MAX_RETRY_COUNT=5"
+          echo ""
+          echo "For Google Cloud Run:"
+          echo "  gcloud run deploy push-platform-worker \\"
+          echo "    --image ghcr.io/${{ github.repository_owner }}/push-platform-worker:sha-${{ github.sha }} \\"
+          echo "    --platform managed \\"
+          echo "    --region us-central1 \\"
+          echo "    --set-env-vars DATABASE_URL=\$DATABASE_URL,FIREBASE_PROJECT_ID=\$FIREBASE_PROJECT_ID,NODE_ENV=production,WORKER_POLL_INTERVAL_MS=10000,WORKER_BATCH_SIZE=100,MAX_RETRY_COUNT=5"
+          echo ""
+          echo "For Docker-based platforms:"
+          echo "  docker pull ghcr.io/${{ github.repository_owner }}/push-platform-worker:sha-${{ github.sha }}"
+          echo "  docker run -d \\"
+          echo "    -e DATABASE_URL=\$DATABASE_URL \\"
+          echo "    -e FIREBASE_PROJECT_ID=\$FIREBASE_PROJECT_ID \\"
+          echo "    -e NODE_ENV=production \\"
+          echo "    -e WORKER_POLL_INTERVAL_MS=10000 \\"
+          echo "    -e WORKER_BATCH_SIZE=100 \\"
+          echo "    -e MAX_RETRY_COUNT=5 \\"
+          echo "    ghcr.io/${{ github.repository_owner }}/push-platform-worker:sha-${{ github.sha }}"
+          echo ""
+          echo "==================================================================="
+          echo ""
+          echo "NOTE: This workflow provides deployment instructions."
+          echo "To enable automatic deployment, configure your platform's CLI"
+          echo "and add the deployment commands to this step."
+          echo ""
+          echo "Worker deployment prepared successfully!"
+
+      - name: Update deployment status (success)
+        if: success()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          state: success
+          environment-url: ${{ secrets.WORKER_URL || 'https://worker-staging.example.com' }}
+
+      - name: Update deployment status (failure)
+        if: failure()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          state: failure
+
+  # Health check for API deployment
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    needs: deploy-api
+    environment: staging
+    steps:
+      - name: Wait for API to be ready
+        run: sleep 10
+
+      - name: Check API health endpoint
+        run: |
+          echo "==================================================================="
+          echo "API HEALTH CHECK"
+          echo "==================================================================="
+          echo ""
+          echo "Once your API is deployed, this step will verify it's healthy."
+          echo ""
+          echo "The health check will:"
+          echo "  - Poll the /health endpoint"
+          echo "  - Retry 5 times with 10-second intervals"
+          echo "  - Verify response includes status: 'ok' and database: 'connected'"
+          echo "  - Expect 200 status code"
+          echo ""
+          echo "Example health check command:"
+          echo "  for i in {1..5}; do"
+          echo "    response=\$(curl -s -w \"\\n%{http_code}\" \${API_URL}/health)"
+          echo "    status_code=\$(echo \"\$response\" | tail -n1)"
+          echo "    body=\$(echo \"\$response\" | head -n-1)"
+          echo "    if [ \$status_code -eq 200 ]; then"
+          echo "      if echo \"\$body\" | grep -q '\"status\":\"ok\"' && echo \"\$body\" | grep -q '\"database\":\"connected\"'; then"
+          echo "        echo \"Health check passed!\""
+          echo "        exit 0"
+          echo "      fi"
+          echo "    fi"
+          echo "    echo \"Attempt \$i failed, retrying in 10 seconds...\""
+          echo "    sleep 10"
+          echo "  done"
+          echo "  echo \"Health check failed after 5 attempts\""
+          echo "  exit 1"
+          echo ""
+          echo "==================================================================="
+          echo ""
+          echo "NOTE: Configure API_URL secret with your staging API URL"
+          echo "to enable automatic health checks."
+          echo ""
+          echo "Health check placeholder completed."
